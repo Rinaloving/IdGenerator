@@ -1,5 +1,10 @@
-package regworkerid
+package main
 
+/*
+#include <stdio.h>
+#include <stdlib.h>
+*/
+import "C"
 import (
 	"context"
 	"fmt"
@@ -36,16 +41,16 @@ var _WorkerIdValueKeyPrefix string = "IdGen:WorkerId:Value:" // redis 中的key
 var _WorkerIdFlag = "Y"                                      // IdGen:WorkerId:Value:xx 的值（将来可用 _token 替代）
 var _Log = false                                             // 是否输出日志
 
-type RegisterConf struct {
-	Address         string // 注意：哨兵模式下，这里传入的是 Sentinel 节点，不是 Redis 节点
-	Password        string
-	DB              int
-	MasterName      string // 注意：哨兵模式下，这里必须传入 Sentinel 服务名称
-	MaxWorkerId     int32
-	MinWorkerId     int32
-	TotalCount      int32 // 注意：仅对 RegisterMany 生效
-	LifeTimeSeconds int32
-}
+// type RegisterConf struct {
+// 	Address         string // 注意：哨兵模式下，这里传入的是 Sentinel 节点，不是 Redis 节点
+// 	Password        string
+// 	DB              int
+// 	MasterName      string // 注意：哨兵模式下，这里必须传入 Sentinel 服务名称
+// 	MaxWorkerId     int32
+// 	MinWorkerId     int32
+// 	TotalCount      int32 // 注意：仅对 RegisterMany 生效
+// 	LifeTimeSeconds int32
+// }
 
 func Validate(workerId int32) int32 {
 	for _, value := range _workerIdList {
@@ -63,6 +68,7 @@ func Validate(workerId int32) int32 {
 	//}
 }
 
+//export UnRegister
 func UnRegister() {
 	_client = newRedisClient()
 	if _client == nil {
@@ -101,83 +107,19 @@ func autoUnRegister() {
 	}
 }
 
-func RegisterMany(conf RegisterConf) []int32 {
-	if conf.MaxWorkerId < 0 || conf.MinWorkerId > conf.MaxWorkerId {
-		return []int32{-2}
-	}
-
-	if conf.TotalCount < 1 {
-		return []int32{-1}
-	} else if conf.TotalCount == 0 {
-		conf.TotalCount = 1
-	}
-
-	_MaxWorkerId = conf.MaxWorkerId
-	_MinWorkerId = conf.MinWorkerId
-	_RedisConnString = conf.Address
-	_RedisPassword = conf.Password
-	_RedisDB = conf.DB
-	_RedisMasterName = conf.MasterName
-	_WorkerIdLifeTimeSeconds = conf.LifeTimeSeconds
-
-	_client = newRedisClient()
-	if _client == nil {
-		return []int32{-1}
-	}
-	defer func() {
-		if _client != nil {
-			_ = _client.Close()
-		}
-	}()
-
-	autoUnRegister()
-
-	//_, err := _client.Ping(_ctx).Result()
-	//if err != nil {
-	//	//panic("init redis error")
-	//	return []int{-3}
-	//} else {
-	//	if _Log {
-	//		fmt.Println("init redis ok")
-	//	}
-	//}
-
-	_lifeIndex++
-	_workerIdList = make([]int32, conf.TotalCount)
-	for key := range _workerIdList {
-		_workerIdList[key] = -1 // 全部初始化-1
-	}
-
-	useExtendFunc := false
-	for key := range _workerIdList {
-		id := register(_lifeIndex)
-		if id > -1 {
-			useExtendFunc = true
-			_workerIdList[key] = id //= append(_workerIdList, id)
-		} else {
-			break
-		}
-	}
-
-	if useExtendFunc {
-		go extendLifeTime(_lifeIndex)
-	}
-
-	return _workerIdList
-}
-
-func RegisterOne(conf RegisterConf) int32 {
-	if conf.MaxWorkerId < 0 || conf.MinWorkerId > conf.MaxWorkerId {
+//export RegisterOne
+func RegisterOne(Address string, Password string, DB int, MasterName string, MaxWorkerId int32, MinWorkerId int32, LifeTimeSeconds int32) int32 {
+	if MaxWorkerId < 0 || MinWorkerId > MaxWorkerId {
 		return -2
 	}
-
-	_MaxWorkerId = conf.MaxWorkerId
-	_MinWorkerId = conf.MinWorkerId
-	_RedisConnString = conf.Address
-	_RedisPassword = conf.Password
-	_RedisDB = conf.DB
-	_RedisMasterName = conf.MasterName
-	_WorkerIdLifeTimeSeconds = conf.LifeTimeSeconds
+	//defer C.free(unsafe.Pointer(Address))
+	_MaxWorkerId = MaxWorkerId
+	_MinWorkerId = MinWorkerId
+	_RedisConnString = Address
+	_RedisPassword = Password
+	_RedisDB = DB
+	_RedisMasterName = MasterName
+	_WorkerIdLifeTimeSeconds = LifeTimeSeconds
 	_loopCount = 0
 
 	_client = newRedisClient()
@@ -458,3 +400,12 @@ func isAvailable(workerId int32) bool {
 
 	return r != _WorkerIdFlag
 }
+
+//export TestSay
+func TestSay() {
+	fmt.Println("Hello go ....")
+}
+
+// func main() {
+
+// }
